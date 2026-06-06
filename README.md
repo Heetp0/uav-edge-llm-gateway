@@ -32,6 +32,7 @@ uav-edge-llm-gateway/
 │   ├── benchmark_results.csv # Empirical timing & accuracy log
 │   └── plot_results.py       # Latency distribution and jitter plotting script
 ├── .gitignore                # Exclusions for build/ and model weights
+├── requirements.txt          # Python dependencies
 └── README.md                 # Main documentation file
 ```
 
@@ -49,7 +50,7 @@ uav-edge-llm-gateway/
 
 1. **Clone the Repository:**
    ```bash
-   git clone https://github.com/YOUR-USERNAME/uav-edge-llm-gateway.git
+   git clone [https://github.com/Heetp0/uav-edge-llm-gateway.git](https://github.com/Heetp0/uav-edge-llm-gateway.git)
    cd uav-edge-llm-gateway
    ```
 
@@ -59,7 +60,12 @@ uav-edge-llm-gateway/
    ollama pull qwen2.5:3b
    ```
 
-3. **Build the ROS 2 Workspace:**
+3. **Install Python Dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Build the ROS 2 Workspace:**
    Navigate to the workspace folder, source your ROS 2 core environment, and compile your nodes:
    ```bash
    cd ros2_ws
@@ -72,31 +78,51 @@ uav-edge-llm-gateway/
 
 ## 5. Execution Guide
 
-To evaluate the closed-loop control loop, execute the following commands across separate terminal instances within your WSL2 environment:
+**CRITICAL NOTE: Every single step in this section MUST be executed in its own separate terminal instance (or tab). These are continuous background processes that must run concurrently to form the closed control loop.**
 
 ### Step 1: Launch Headless PX4 Autopilot SITL
-Run the flight controller using the headless environment configuration flag to preserve maximum CPU/GPU processing bandwidth for the local inference engine:
+*(Terminal 1)* Run the flight controller using the headless environment configuration flag to preserve maximum CPU/GPU processing bandwidth for the local inference engine:
 ```bash
 cd ~/PX4-Autopilot
 HEADLESS=1 make px4_sitl gz_x500_mono_cam
 ```
 
 ### Step 2: Initialize the Micro XRCE-DDS Middleware Bridge
-Launch the communication agent over UDP port 8888 to translate internal uORB state topics to external ROS 2 publication schemas:
+*(Terminal 2)* Launch the communication agent over UDP port 8888 to translate internal uORB state topics to external ROS 2 publication schemas:
 ```bash
 MicroXRCEAgent udp4 -p 8888
 ```
 
 ### Step 3: Run the Deterministic Safety Filter Node
-Spin up the compiled C++ safety wrapper to begin listening for high-level JSON trajectories and evaluating spatial geofences:
+*(Terminal 3)* Spin up the compiled C++ safety wrapper to begin listening for high-level JSON trajectories and evaluating spatial geofences:
 ```bash
 cd ~/uav-edge-llm-gateway/ros2_ws
 source install/setup.bash
 ros2 run drone_safety safety_filter_node
 ```
 
-### Step 4: Execute the Automated Benchmarking Suite
-In a fresh terminal, run the evaluation script to feed the 20-command token pipeline sequentially to the LLM and capture edge execution metrics:
+### Step 4: Edge Hardware Simulation (CPU Throttling)
+*(Terminal 4)* To accurately replicate the severe resource constraints of a UAV companion computer (e.g., Jetson Orin Nano) within a desktop WSL2 environment, the LLM inference engine must be artificially throttled **before** benchmarking.
+
+1. **Install CPULimit:**
+   ```bash
+   sudo apt update && sudo apt install cpulimit
+   ```
+
+2. **Locate the Inference Engine PID:**
+   Find the Process ID of the active Ollama background service:
+   ```bash
+   pgrep ollama
+   ```
+
+3. **Apply Compute Constraints:**
+   Limit the localized process to a strict CPU percentage (e.g., 15% of a single core) using the PID retrieved above:
+   ```bash
+   sudo cpulimit -p <PID> -l 15 -b
+   ```
+
+### Step 5: Execute the Automated Benchmarking Suite
+*(Terminal 5)* With the hardware constraints applied, run the evaluation script to feed the 20-command token pipeline sequentially to the LLM and capture edge execution metrics:
 ```bash
 cd ~/uav-edge-llm-gateway/scripts
 python3 benchmark_pipeline.py
