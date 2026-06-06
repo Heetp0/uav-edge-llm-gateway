@@ -1,0 +1,18 @@
+# ROS 2 Build Files
+build/
+install/
+log/
+
+# Python Cache & Environments
+__pycache__/
+*.pyc
+venv/
+.env
+
+# Large AI Model Weights
+*.gguf
+*.bin
+*.pt
+
+# OS Generated Files
+.DS_Store
