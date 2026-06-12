@@ -116,14 +116,16 @@ ros2 run drone_safety safety_filter_node
    ```
 
 3. **Apply Compute Constraints:**
-   Limit the localized process to a strict CPU percentage (e.g., 15% of a single core) using the PID retrieved above:
+   Limit the localized process to a strict CPU percentage i.e. 4 CPU cores using the PID retrieved above:
    ```bash
-   sudo cpulimit -p <PID> -l 15 -b
+   sudo cpulimit -p <PID> -l 400 -b
    ```
 
 ### Step 5: Execute the Automated Benchmarking Suite
 *(Terminal 5)* With the hardware constraints applied, run the evaluation script to feed the 20-command token pipeline sequentially to the LLM and capture edge execution metrics:
 ```bash
+source /opt/ros/jazzy/setup.bash
+source ~/uav-edge-llm-gateway/ros2_ws/install/setup.bash
 cd ~/uav-edge-llm-gateway/scripts
 python3 benchmark_pipeline.py
 ```
