@@ -1,16 +1,21 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>drone_safety</name>
-  <version>0.1.0</version>
-  <description>Deterministic C++ safety filter for UAV LLM gateway</description>
+  <version>0.2.0</version>
+  <description>Deterministic C++ safety filter and LLM benchmark pipeline for UAV edge AI gateway</description>
   <maintainer email="heetp2296@gmail.com">Heetkumar Patel</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- C++ safety filter dependencies -->
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
   <depend>px4_msgs</depend>
-  <depend>nlohmann-json-dev</depend>
+  <depend>nlohmann-json</depend>
+
+  <!-- Python benchmark node dependencies (installed via pip, not rosdep) -->
+  <!-- requests, pandas, matplotlib — see requirements.txt -->
 
   <export>
     <build_type>ament_cmake</build_type>
