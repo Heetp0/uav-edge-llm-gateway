@@ -5,7 +5,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# ── Core ROS 2 build tool ─────────────────────────────────────────────────────
+# ── Core ROS 2 build tools ────────────────────────────────────────────────────
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
 
@@ -29,31 +29,44 @@ install(TARGETS safety_filter_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# ── Install Python nodes (makes them runnable via ros2 run) ───────────────────
-# ros2 run drone_safety benchmark_pipeline
-# ros2 run drone_safety llm_gateway_node  (once added)
+# ── Python package registration ───────────────────────────────────────────────
+# Requires: ros2_ws/src/drone_safety/drone_safety/__init__.py
 ament_python_install_package(${PROJECT_NAME})
 
+# ── Install Python nodes (each gets its own block due to RENAME) ──────────────
+# ros2 run drone_safety benchmark_pipeline
 install(PROGRAMS
   scripts/benchmark_pipeline.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME benchmark_pipeline
 )
 
+# ros2 run drone_safety llm_gateway_node
+install(PROGRAMS
+  scripts/llm_gateway_node.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME llm_gateway_node
+)
+
 # ── Install data scripts ──────────────────────────────────────────────────────
+# ros2 run drone_safety plot_results
 install(PROGRAMS
   data/plot_results.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME plot_results
 )
 
-# ── Install launch files (once launch/ directory is added) ────────────────────
+# ── Install launch files ──────────────────────────────────────────────────────
+# ros2 launch drone_safety safety_filter.launch.py
+# ros2 launch drone_safety benchmark.launch.py
+# ros2 launch drone_safety full_system.launch.py
 install(DIRECTORY
   launch
   DESTINATION share/${PROJECT_NAME}
 )
 
-# ── Install config files (once config/ directory is added) ───────────────────
+# ── Install config files ──────────────────────────────────────────────────────
+# Loaded at runtime by safety_filter_node and llm_gateway_node
 install(DIRECTORY
   config
   DESTINATION share/${PROJECT_NAME}
