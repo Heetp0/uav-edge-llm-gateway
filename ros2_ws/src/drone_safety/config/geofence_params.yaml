@@ -1,0 +1,83 @@
+# =============================================================================
+# UAV Edge LLM Gateway — Shared Configuration
+# =============================================================================
+# This file is the single source of truth for all operational parameters.
+#
+# C++ safety_filter_node reads these via the ROS 2 parameter server at startup.
+# Python benchmark_pipeline reads them via rclpy node parameters.
+# launch files pass this file using the `parameters` key.
+#
+# To apply changes: rebuild is NOT required. Restart the nodes.
+# =============================================================================
+
+safety_filter_node:
+  ros__parameters:
+
+    # ── Geofence ─────────────────────────────────────────────────────────────
+    # Cylindrical volume centred on the home (arm) position.
+    # Home is locked automatically from the first valid VehicleOdometry message.
+
+    # Maximum altitude AGL the drone is permitted to reach (metres).
+    # Commands that would place target_d below -max_altitude are rejected.
+    max_altitude: 100.0
+
+    # Lateral radius of the geofence cylinder from home position (metres).
+    # Commands that would place the target beyond this radius are rejected.
+    max_range_xy: 40.0
+
+    # Ground noise tolerance (metres).
+    # target_d values between 0 and +ground_noise_tolerance are clamped to 0.0
+    # rather than triggering a ground collision error.
+    # Prevents false positives from estimator noise at low altitude.
+    ground_noise_tolerance: 0.5
+
+    # ── Watchdog ──────────────────────────────────────────────────────────────
+    # Maximum age of the last VehicleOdometry message before the node
+    # considers the odometry stream dead and forces BLIND_HALT (seconds).
+    watchdog_timeout_sec: 0.5
+
+
+llm_benchmark_node:
+  ros__parameters:
+
+    # ── Ollama endpoint ───────────────────────────────────────────────────────
+    ollama_url: "http://localhost:11434/api/generate"
+
+    # Model to benchmark. Must be pulled via `ollama pull <model>` first.
+    model_name: "qwen2.5:3b"
+
+    # ── Benchmark run configuration ───────────────────────────────────────────
+    # Total number of complete passes through TEST_DATA.
+    total_runs: 50
+
+    # ── Retry / backoff ───────────────────────────────────────────────────────
+    # Maximum number of HTTP retry attempts per command before writing a failure row.
+    max_retries: 3
+
+    # Base backoff in seconds. Actual backoff = base * 2^(attempt-1).
+    backoff_base: 3.0
+
+    # HTTP connection timeout (seconds).
+    connect_timeout: 5
+
+    # HTTP read timeout (seconds). Set high — edge inference can be slow.
+    read_timeout: 90
+
+    # ── Session management ────────────────────────────────────────────────────
+    # Recycle the TCP session every N completed requests to prevent
+    # connection-level timeouts on long benchmark runs.
+    session_recycle: 100
+
+    # ── Adaptive pacing ───────────────────────────────────────────────────────
+    # Rolling window size for latency averaging (number of requests).
+    latency_window: 10
+
+    # Minimum and maximum inter-request sleep derived from rolling latency average.
+    # sleep = clamp(avg_latency_ms / 10000, min_sleep, max_sleep)
+    min_sleep: 0.5
+    max_sleep: 6.0
+
+    # ── Semantic evaluation ───────────────────────────────────────────────────
+    # Tolerance in metres for x/y/z coordinate comparison.
+    # A parsed coordinate is considered correct if |parsed - expected| <= tolerance.
+    spatial_tolerance: 0.5
