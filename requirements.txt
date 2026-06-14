@@ -1,3 +1,38 @@
-requests
-pandas
-matplotlib
+# ─────────────────────────────────────────────────────────────────────────────
+# UAV Edge LLM Gateway — Python Dependencies
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# ROS 2 REQUIREMENT
+#   This project requires ROS 2 Humble (or later) installed separately.
+#   https://docs.ros.org/en/humble/Installation.html
+#
+#   The following packages are provided by ROS 2 — do NOT pip install them:
+#     rclpy, std_msgs, px4_msgs
+#   Source your ROS 2 workspace before running any node:
+#     source /opt/ros/humble/setup.bash
+#     source ros2_ws/install/setup.bash
+#
+# OLLAMA REQUIREMENT
+#   A locally running Ollama instance with the target model pulled is required.
+#   https://ollama.com/download
+#   Pull the model:  ollama pull qwen2.5:3b
+#
+# INSTALL PYTHON DEPS
+#   pip install -r requirements.txt
+# ─────────────────────────────────────────────────────────────────────────────
+
+# HTTP client — used by benchmark_pipeline.py to query Ollama REST API
+requests>=2.31.0
+
+# Data processing — used by benchmark_pipeline.py (CSV) and plot_results.py
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Plotting — used by plot_results.py to generate benchmark charts
+matplotlib>=3.7.0
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DEV / TEST DEPENDENCIES
+# Install with: pip install -r requirements.txt pytest
+# ─────────────────────────────────────────────────────────────────────────────
+pytest>=7.4.0
