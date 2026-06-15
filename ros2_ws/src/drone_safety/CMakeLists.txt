@@ -36,7 +36,7 @@ ament_python_install_package(${PROJECT_NAME})
 # ── Install Python nodes (each gets its own block due to RENAME) ──────────────
 # ros2 run drone_safety benchmark_pipeline
 install(PROGRAMS
-  scripts/benchmark_pipeline.py
+  ../../../scripts/benchmark_pipeline.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME benchmark_pipeline
 )
@@ -51,7 +51,7 @@ install(PROGRAMS
 # ── Install data scripts ──────────────────────────────────────────────────────
 # ros2 run drone_safety plot_results
 install(PROGRAMS
-  data/plot_results.py
+  ../../../data/plot_results.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME plot_results
 )
