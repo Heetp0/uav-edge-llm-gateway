@@ -22,7 +22,18 @@ enum class SafetyState {
 
 class SafetyFilterNode : public rclcpp::Node {
 public:
-    SafetyFilterNode() : Node("safety_filter_node"), current_state_(SafetyState::BLIND_HALT), odom_valid_(false), home_set_(false) {
+    SafetyFilterNode() : Node("safety_filter_node"), current_state_(SafetyState::BLIND_HALT), odom_valid_(false), home_set_(false), home_n_(0.0), home_e_(0.0) {
+
+        this->declare_parameter("max_altitude", 100.0);
+        this->declare_parameter("max_range_xy", 40.0);
+        this->declare_parameter("watchdog_timeout_sec", 0.5);
+        this->declare_parameter("ground_noise_tolerance", 0.5);
+
+        max_altitude_ = this->get_parameter("max_altitude").as_double();
+        max_range_xy_ = this->get_parameter("max_range_xy").as_double();
+        max_range_xy_sq_ = max_range_xy_ * max_range_xy_;
+        watchdog_timeout_sec_ = this->get_parameter("watchdog_timeout_sec").as_double();
+        ground_noise_tolerance_ = this->get_parameter("ground_noise_tolerance").as_double();
 
         mode_publisher_ = this->create_publisher<px4_msgs::msg::OffboardControlMode>(
             "/fmu/in/offboard_control_mode", rclcpp::QoS(10).best_effort());
@@ -62,11 +73,11 @@ public:
     }
 
 private:
-    static constexpr double MAX_ALTITUDE = 100.0;   
-    static constexpr double MAX_RANGE_XY =  40.0;   
-    static constexpr double MAX_RANGE_XY_SQ = MAX_RANGE_XY * MAX_RANGE_XY;
-    static constexpr double WATCHDOG_TIMEOUT_SEC = 0.5;
-    static constexpr double GROUND_NOISE_TOLERANCE = 0.5; 
+    double max_altitude_;   
+    double max_range_xy_;   
+    double max_range_xy_sq_;
+    double watchdog_timeout_sec_;
+    double ground_noise_tolerance_; 
 
     std::mutex setpoint_mutex_;
     px4_msgs::msg::TrajectorySetpoint current_setpoint_;
@@ -114,7 +125,10 @@ private:
             return;
         }
 
-        if ((this->get_clock()->now() - odom_arrival_time).seconds() > WATCHDOG_TIMEOUT_SEC) {
+        if ((this->get_clock()->now() - odom_arrival_time).seconds() > watchdog_timeout_sec_) {
+            RCLCPP_ERROR(this->get_logger(),
+                "Stale odometry in command path. Forcing BLIND_HALT.");
+            engage_blind_halt();
             return; 
         }
 
@@ -149,8 +163,8 @@ private:
             double yaw = extract_yaw(odom);
             double cos_yaw = std::cos(yaw);
             double sin_yaw = std::sin(yaw);
-            double delta_n = (x * cos_yaw) + (y * sin_yaw);
-            double delta_e = (x * sin_yaw) - (y * cos_yaw);
+            double delta_n = (x * cos_yaw) - (y * sin_yaw);
+            double delta_e = (x * sin_yaw) + (y * cos_yaw);
 
             double target_n = odom.position[0] + delta_n;
             double target_e = odom.position[1] + delta_e;
@@ -160,11 +174,11 @@ private:
             // Since NED Down is positive, we subtract the FLU vector.
             double target_d = odom.position[2] - z; 
 
-            if (target_d < -MAX_ALTITUDE) {
+            if (target_d < -max_altitude_) {
                 throw std::runtime_error("Ceiling breached!");
             }
             if (target_d > 0.0) {
-                if (target_d <= GROUND_NOISE_TOLERANCE) {
+                if (target_d <= ground_noise_tolerance_) {
                     target_d = 0.0;
                 } else {
                     throw std::runtime_error("Ground collision predicted!");
@@ -173,7 +187,7 @@ private:
 
             double displacement_n = target_n - h_n;
             double displacement_e = target_e - h_e;
-            if ((displacement_n * displacement_n) + (displacement_e * displacement_e) > MAX_RANGE_XY_SQ) {
+            if ((displacement_n * displacement_n) + (displacement_e * displacement_e) > max_range_xy_sq_) {
                 throw std::runtime_error("Cylindrical geofence breached!");
             }
 
@@ -214,7 +228,7 @@ private:
         current_setpoint_.velocity = {q_nan, q_nan, q_nan}; 
         current_setpoint_.acceleration = {q_nan, q_nan, q_nan};
         current_setpoint_.yaw = static_cast<float>(extract_yaw(safe_odom));
-        current_setpoint_.yawspeed = 0.0f;               
+        current_setpoint_.yawspeed = q_nan;               
         
         current_state_ = SafetyState::KINEMATIC_HOLD;
     }
@@ -242,11 +256,11 @@ private:
             std::lock_guard<std::mutex> lock(odom_mutex_);
             if (!odom_valid_) return; 
             
-            if (now >= last_odom_time_ && (now - last_odom_time_).seconds() > WATCHDOG_TIMEOUT_SEC) {
+            if (now >= last_odom_time_ && (now - last_odom_time_).seconds() > watchdog_timeout_sec_) {
                 odom_alive = false;
             } else {
                 auto safe_delta = (now >= last_odom_time_) ? (now - last_odom_time_).nanoseconds() : 0;
-                px4_synced_time = current_odom_.timestamp + safe_delta / 1000;
+                px4_synced_time = current_odom_.timestamp + static_cast<uint64_t>(safe_delta) / 1000;
             }
         }
 
