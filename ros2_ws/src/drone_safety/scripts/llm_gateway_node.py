@@ -37,11 +37,17 @@ import math
 import time
 import concurrent.futures
 
+import urllib.parse
+import enum
 import requests
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from std_msgs.msg import String
+
+class GatewayState(enum.Enum):
+    IDLE = 1
+    BUSY = 2
 
 # ── Default constants (overridden by ROS 2 parameters / geofence_params.yaml) ─
 DEFAULT_OLLAMA_URL     = "http://localhost:11434/api/generate"
@@ -74,7 +80,8 @@ def ollama_health_check(session: requests.Session, url: str,
                          connect_timeout: int) -> bool:
     """Check Ollama is reachable before accepting any commands."""
     try:
-        base_url = url.rsplit("/api/", 1)[0]
+        parsed_url = urllib.parse.urlparse(url)
+        base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
         r = session.get(base_url, timeout=(connect_timeout, 5))
         return r.status_code == 200
     except Exception:
@@ -82,7 +89,6 @@ def ollama_health_check(session: requests.Session, url: str,
 
 
 def query_ollama(
-    session: requests.Session,
     command: str,
     ollama_url: str,
     model_name: str,
@@ -105,14 +111,15 @@ def query_ollama(
 
     err = "UNKNOWN_ERROR"
 
-    for attempt in range(1, max_retries + 1):
-        try:
-            t0 = time.perf_counter()
-            response = session.post(
-                ollama_url,
-                json=payload,
-                timeout=(connect_timeout, read_timeout),
-            )
+    with requests.Session() as session:
+        for attempt in range(1, max_retries + 1):
+            try:
+                t0 = time.perf_counter()
+                response = session.post(
+                    ollama_url,
+                    json=payload,
+                    timeout=(connect_timeout, read_timeout),
+                )
             latency_ms = round((time.perf_counter() - t0) * 1000, 2)
             response.raise_for_status()
 
@@ -121,12 +128,13 @@ def query_ollama(
             extracted_json_str = ""
 
             try:
+                parse_err = None
                 parsed = None
-                for match in re.finditer(r'\{.*?\}', raw_text, re.DOTALL):
+                for match in re.finditer(r'\{[^{}]*\}', raw_text):
                     try:
                         temp = json.loads(match.group(0))
                         required = {"action", "x", "y", "z"}
-                        if set(temp.keys()) == required:
+                        if required.issubset(temp.keys()):
                             parsed = temp
                             extracted_json_str = match.group(0)
                             break
@@ -148,17 +156,19 @@ def query_ollama(
 
                 syntax_ok = True
 
-            except (ValueError, TypeError) as parse_err:
+            except (ValueError, TypeError) as e:
+                parse_err = e
                 logger.warning(f"Parse error: {parse_err} | Raw: {raw_text[:120]}")
 
-            return {
-                "syntax_ok":        syntax_ok,
-                "extracted_payload": extracted_json_str,
-                "raw_output":       raw_text,
-                "latency_ms":       latency_ms,
-                "attempts":         attempt,
-                "error":            "" if syntax_ok else str(parse_err if 'parse_err' in dir() else "parse failed"),
-            }
+            if syntax_ok:
+                return {
+                    "syntax_ok":        syntax_ok,
+                    "extracted_payload": extracted_json_str,
+                    "raw_output":       raw_text,
+                    "latency_ms":       latency_ms,
+                    "attempts":         attempt,
+                    "error":            "",
+                }
 
         except (requests.exceptions.ConnectTimeout,
                 requests.exceptions.ReadTimeout):
@@ -231,7 +241,7 @@ class LLMGatewayNode(Node):
         self.executor_pool   = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.current_future  = None
         self.current_command = ""
-        self.node_state      = "IDLE"
+        self.node_state      = GatewayState.IDLE
 
         # ── HTTP session ──────────────────────────────────────────────────────
         self.session = requests.Session()
@@ -263,7 +273,7 @@ class LLMGatewayNode(Node):
         if not command:
             return
 
-        if self.node_state != "IDLE":
+        if self.node_state != GatewayState.IDLE:
             self.get_logger().warning(
                 f"Gateway BUSY — dropping command: '{command[:60]}'"
             )
@@ -274,7 +284,6 @@ class LLMGatewayNode(Node):
         self.current_command = command
         self.current_future = self.executor_pool.submit(
             query_ollama,
-            self.session,
             command,
             self.ollama_url,
             self.model_name,
@@ -284,21 +293,31 @@ class LLMGatewayNode(Node):
             self.read_timeout,
             self.get_logger(),
         )
-        self.node_state = "WAITING"
+        self.node_state = GatewayState.BUSY
         self._publish_status(f"PROCESSING: '{command[:60]}'")
 
     # ── Poll timer ────────────────────────────────────────────────────────────
 
     def poll_callback(self):
         """Non-blocking 50ms poll — checks if the inference future is done."""
-        if self.node_state != "WAITING":
+        if self.node_state != GatewayState.BUSY:
             return
         if self.current_future is None or not self.current_future.done():
             return
 
-        result = self.current_future.result()
+        try:
+            result = self.current_future.result()
+        except Exception as e:
+            result = {
+                "syntax_ok": False,
+                "extracted_payload": "",
+                "raw_output": f"EXCEPTION: {e}",
+                "latency_ms": -1.0,
+                "attempts": 0,
+                "error": str(e),
+            }
         self.current_future = None
-        self.node_state = "IDLE"
+        self.node_state = GatewayState.IDLE
         self._handle_result(result)
 
     # ── Result handler ────────────────────────────────────────────────────────
