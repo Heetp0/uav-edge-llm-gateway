@@ -26,7 +26,7 @@ pip install -r requirements.txt
 ```
 **3. Download the Edge-Optimized AI Model**
 ```bash
-ollama pull qwen2.5:3b-instruct-q4_0
+ollama pull qwen2.5:3b
 
 ```
 **4. Build the ROS 2 Workspace**
