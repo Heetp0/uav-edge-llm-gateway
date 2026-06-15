@@ -1,35 +1,94 @@
-# UAV Edge LLM Gateway: Deploying Local Quantized Models
-
-## 1. Project Title & Overview
-The UAV Edge LLM Gateway is a fully localized, closed-loop AI system that translates natural language commands into real-time flight trajectories for Unmanned Aerial Vehicles (UAVs). Utilizing an onboard 4-bit quantized Large Language Model (Qwen-2.5-3B, Q4_K_M), the gateway eliminates cloud dependency and latency spikes. A deterministic C++ safety filter intercepts the LLM output, strictly enforcing kinematic limits and spatial geofences before dispatching setpoints to the flight controller.
-
-## 2. System Architecture
-The software pipeline bridges three fundamental components within an Ubuntu environment:
-* **LLM Gateway Node (Python / Ollama):** An edge inference engine that parses unstructured natural language commands into structured JSON coordinate payloads.
-* **Safety Filter Node (C++):** A deterministic tri-state machine (NOMINAL, KINEMATIC_HOLD, BLIND_HALT) that enforces a cylindrical geofence and mathematically validates all coordinates before conversion to MAVLink/uORB messages.
-* **Benchmark Pipeline:** A Python-based automated testing suite that evaluates the LLM's spatial reasoning and latency across predefined command scenarios, logging metrics to CSV.
-
-## 3. Prerequisites
-Ensure the following standard software components are installed:
-* Ubuntu 22.04 or 24.04 (native or WSL2)
-* ROS 2 (Humble or Jazzy)
-* PX4 Autopilot & Micro XRCE-DDS Agent
-* Ollama (with the `qwen2.5:3b` model pulled locally)
-
-## 4. Installation & Build
-
-1. Clone the repository:
+# UAV Edge LLM Gateway
+A deterministic safety architecture bridging natural language Large Language Models (LLMs) with hard real-time UAV flight controllers.
+This repository allows an autonomous drone (via PX4 SITL) to process natural language spatial commands using locally hosted, heavily quantized AI models on constrained edge hardware, without compromising physical flight safety.
+## 🚀 System Architecture
+ * **Intelligence Layer (Ollama):** Hosts the quantized qwen2.5:3b LLM locally.
+ * **Translation Layer (Python):** Subscribes to natural language inputs, prompts the LLM, and formats the output into strict JSON 3D coordinates.
+ * **Safety Gateway (C++):** Intercepts the AI's JSON. Acts as a deterministic hard-stop, enforcing cylindrical geofences and kinematic laws while rejecting hallucinations.
+ * **Actuation Layer (PX4 / DDS):** Executes the sanitized MAVLink setpoints in the Gazebo physics engine.
+## 🛠️ Prerequisites
+Target environment: **Ubuntu 24.04** and **ROS 2 Jazzy**.
+ * ROS 2 Jazzy
+ * PX4 Autopilot (configured for SITL & Gazebo)
+ * MicroXRCEAgent
+ * Ollama
+## ⚙️ Installation & Setup
+**1. Clone the repository**
 ```bash
-git clone https://github.com/Heetp0/uav-edge-llm-gateway.git
+git clone [https://github.com/Heetp0/uav-edge-llm-gateway.git](https://github.com/Heetp0/uav-edge-llm-gateway.git)
 cd uav-edge-llm-gateway
-```
 
-2. Install the necessary Python dependencies:
+```
+**2. Install Python dependencies**
 ```bash
 pip install -r requirements.txt
-```
 
-3. Build the ROS 2 workspace:
+```
+**3. Download the Edge-Optimized AI Model**
+```bash
+ollama pull qwen2.5:3b-instruct-q4_0
+
+```
+**4. Build the ROS 2 Workspace**
+```bash
+cd ros2_ws
+source /opt/ros/jazzy/setup.bash
+colcon build
+source install/setup.bash
+cd ..
+
+```
+## 🚁 Running the Full Flight Stack
+Split your terminal into 5 separate panes to monitor the data flow safely.
+**Pane 1: Boot PX4 Physics (Gazebo)**
+```bash
+cd ~/PX4-Autopilot
+HEADLESS=1 make px4_sitl gz_x500_mono_cam
+
+```
+**Pane 2: Boot the DDS Network Bridge**
+```bash
+MicroXRCEAgent udp4 -p 8888
+
+```
+**Pane 3: Boot the C++ Safety Filter**
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/uav-edge-llm-gateway/ros2_ws/install/setup.bash
+ros2 run drone_safety safety_filter_node
+
+```
+**Pane 4: Apply Edge Hardware Constraints**
+```bash
+sudo systemctl restart ollama
+sudo cpulimit -p $(pgrep ollama) -l 400 -b
+
+```
+**Pane 5: Launch the AI Translation Gateway**
+*(Note: Executed directly via Python to bypass current CMake install configuration)*
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/uav-edge-llm-gateway/ros2_ws/install/setup.bash
+python3 ~/uav-edge-llm-gateway/ros2_ws/src/drone_safety/scripts/llm_gateway_node.py
+
+```
+## 📊 Running the Automated Benchmark Suite
+The benchmarking pipeline evaluates latency, syntactic integrity, and semantic spatial reasoning.
+**1. Run the Evaluation Pipeline:**
+Instead of running the gateway node in Pane 5, execute the benchmark script from the root repository scripts directory:
+```bash
+source /opt/ros/jazzy/setup.bash
+cd ~/uav-edge-llm-gateway/scripts
+python3 benchmark_pipeline.py
+
+```
+**2. Generate Performance Graphs:**
+Plot the hardware metrics using the script located in the root repository data directory:
+```bash
+cd ~/uav-edge-llm-gateway/data
+python3 plot_results.py
+
+```
 ```bash
 cd ros2_ws
 colcon build --symlink-install
