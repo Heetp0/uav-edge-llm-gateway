@@ -24,7 +24,7 @@ DEFAULT_OUT = SCRIPT_DIR
 
 def parse_boolean_column(series: pd.Series) -> pd.Series:
     """Case-insensitive boolean parsing that defaults to False for bad data/timeouts."""
-    return series.astype(str).str.strip().str.lower() == "true"
+    return series.astype(str).str.strip().str.lower().map({"true": True, "false": False, "1": True, "0": False}).fillna(False)
 
 
 def generate_plots(csv_path: str, output_dir: str):
@@ -39,8 +39,7 @@ def generate_plots(csv_path: str, output_dir: str):
     df = pd.read_csv(csv_path)
 
     if len(df) == 0:
-        print("[ERROR] CSV file is empty.")
-        sys.exit(1)
+        raise RuntimeError("No valid rows found.")
 
     # ── FIX: Master Command List for Total Failure Tracking ──
     all_cmds = pd.to_numeric(df["Command ID"], errors="coerce").dropna().astype(int).unique()
@@ -148,7 +147,7 @@ def generate_plots(csv_path: str, output_dir: str):
         cmd_acc = cmd_acc.drop(-1)
 
     plt.figure(figsize=(10, 4))
-    plt.bar(cmd_acc.index.astype(str), cmd_acc.values, color="#4C72B0")
+    plt.bar(range(len(cmd_acc)), cmd_acc.values, color="#4C72B0")
     plt.title(
         "Semantic Accuracy Per Command (Penalized for Timeouts)",
         fontsize=12, fontweight="bold",
@@ -156,7 +155,7 @@ def generate_plots(csv_path: str, output_dir: str):
     plt.xlabel("Command ID")
     plt.ylabel("Success Rate (%)")
     plt.ylim(0, 110)
-    plt.xticks(rotation=45 if len(cmd_acc) > 15 else 0)
+    plt.xticks(range(len(cmd_acc)), cmd_acc.index.astype(str), rotation=45 if len(cmd_acc) > 15 else 0)
     plt.grid(axis="y", linestyle="--", alpha=0.5)
     plt.tight_layout()
     save("per_command_accuracy.png")
