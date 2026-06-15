@@ -37,7 +37,7 @@ safety_filter_node:
     watchdog_timeout_sec: 0.5
 
 
-llm_benchmark_node:
+llm_benchmark_node: &llm_node
   ros__parameters:
 
     # ── Ollama endpoint ───────────────────────────────────────────────────────
@@ -81,3 +81,5 @@ llm_benchmark_node:
     # Tolerance in metres for x/y/z coordinate comparison.
     # A parsed coordinate is considered correct if |parsed - expected| <= tolerance.
     spatial_tolerance: 0.5
+
+llm_gateway_node: *llm_node
