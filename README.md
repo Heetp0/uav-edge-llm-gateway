@@ -1,151 +1,191 @@
 # UAV Edge LLM Gateway
+
 A deterministic safety architecture bridging natural language Large Language Models (LLMs) with hard real-time UAV flight controllers.
+
 This repository allows an autonomous drone (via PX4 SITL) to process natural language spatial commands using locally hosted, heavily quantized AI models on constrained edge hardware, without compromising physical flight safety.
+
+---
+
 ## 🚀 System Architecture
- * **Intelligence Layer (Ollama):** Hosts the quantized qwen2.5:3b LLM locally.
- * **Translation Layer (Python):** Subscribes to natural language inputs, prompts the LLM, and formats the output into strict JSON 3D coordinates.
- * **Safety Gateway (C++):** Intercepts the AI's JSON. Acts as a deterministic hard-stop, enforcing cylindrical geofences and kinematic laws while rejecting hallucinations.
- * **Actuation Layer (PX4 / DDS):** Executes the sanitized MAVLink setpoints in the Gazebo physics engine.
+
+| Layer | Component | Role |
+|---|---|---|
+| Intelligence | Ollama (qwen2.5:3b) | Hosts the quantized LLM locally |
+| Translation | `llm_gateway_node.py` | Subscribes to NL commands, queries LLM, publishes validated JSON |
+| Safety | `safety_filter_node` (C++) | Enforces geofence, yaw transform, odometry watchdog, tri-state failsafe |
+| Actuation | PX4 / XRCE-DDS | Executes sanitized trajectory setpoints in Gazebo |
+
+**Topic graph:**
+```
+/llm/command_input → llm_gateway_node → /llm/raw_output → safety_filter_node → /fmu/in/trajectory_setpoint → PX4
+```
+
+---
+
 ## 🛠️ Prerequisites
+
 Target environment: **Ubuntu 24.04** and **ROS 2 Jazzy**.
- * ROS 2 Jazzy
- * PX4 Autopilot (configured for SITL & Gazebo)
- * MicroXRCEAgent
- * Ollama
+
+- [ROS 2 Jazzy](https://docs.ros.org/en/jazzy/Installation.html)
+- [PX4 Autopilot](https://docs.px4.io/main/en/dev_setup/dev_env_linux_ubuntu.html) (configured for SITL and Gazebo)
+- [MicroXRCEAgent](https://micro-xrce-dds.docs.eprosima.com/en/latest/installation.html)
+- [Ollama](https://ollama.com/download)
+
+---
+
 ## ⚙️ Installation & Setup
+
 **1. Clone the repository**
 ```bash
-git clone [https://github.com/Heetp0/uav-edge-llm-gateway.git](https://github.com/Heetp0/uav-edge-llm-gateway.git)
+git clone https://github.com/Heetp0/uav-edge-llm-gateway.git
 cd uav-edge-llm-gateway
-
 ```
+
 **2. Install Python dependencies**
 ```bash
 pip install -r requirements.txt
-
 ```
-**3. Download the Edge-Optimized AI Model**
+
+**3. Pull the edge-optimized AI model**
 ```bash
 ollama pull qwen2.5:3b
-
 ```
-**4. Build the ROS 2 Workspace**
+
+**4. Build the ROS 2 workspace**
 ```bash
 cd ros2_ws
 source /opt/ros/jazzy/setup.bash
-colcon build
+colcon build --symlink-install
 source install/setup.bash
 cd ..
+```
+
+---
+
+## ⚙️ Configuration
+
+System constraints and behaviour are managed centrally in `config/geofence_params.yaml`. Modify this file to adjust safety limits without rebuilding:
+
+| Parameter | Default | Description |
+|---|---|---|
+| `max_altitude` | `100.0` m | Maximum permitted altitude AGL |
+| `max_range_xy` | `40.0` m | Lateral radius of the cylindrical geofence from home position |
+| `ground_noise_tolerance` | `0.5` m | Estimator noise margin at low altitude to prevent false ground collision faults |
+| `watchdog_timeout_sec` | `0.5` s | Maximum age of odometry before forcing BLIND_HALT |
+
+> Changes take effect on the next node startup. A workspace rebuild is not required.
+
+---
+
+## 🚁 Launch Files
+
+The system has three launch files covering distinct stages of development and operation.
+
+### `full_system.launch.py` — One command, full stack
+
+Starts everything in the correct order automatically:
 
 ```
-## 🚁 Running the Full Flight Stack
-Split your terminal into 5 separate panes to monitor the data flow safely.
-**Pane 1: Boot PX4 Physics (Gazebo)**
-```bash
-cd ~/PX4-Autopilot
-HEADLESS=1 make px4_sitl gz_x500_mono_cam
-
+t=0s   ollama serve
+t=0s   PX4 SITL + Gazebo
+t=0s   MicroXRCEAgent (DDS bridge)
+t=5s   safety_filter_node
+t=7s   llm_gateway_node
 ```
-**Pane 2: Boot the DDS Network Bridge**
-```bash
-MicroXRCEAgent udp4 -p 8888
 
-```
-**Pane 3: Boot the C++ Safety Filter**
 ```bash
 source /opt/ros/jazzy/setup.bash
 source ~/uav-edge-llm-gateway/ros2_ws/install/setup.bash
-ros2 run drone_safety safety_filter_node
-
-```
-**Pane 4: Apply Edge Hardware Constraints**
-```bash
-sudo systemctl restart ollama
-sudo cpulimit -p $(pgrep ollama) -l 400 -b
-
-```
-**Pane 5: Launch the AI Translation Gateway**
-*(Note: Executed directly via Python to bypass current CMake install configuration)*
-```bash
-source /opt/ros/jazzy/setup.bash
-source ~/uav-edge-llm-gateway/ros2_ws/install/setup.bash
-python3 ~/uav-edge-llm-gateway/ros2_ws/src/drone_safety/scripts/llm_gateway_node.py
-
-```
-## 📊 Running the Automated Benchmark Suite
-The benchmarking pipeline evaluates latency, syntactic integrity, and semantic spatial reasoning.
-**1. Run the Evaluation Pipeline:**
-Instead of running the gateway node in Pane 5, execute the benchmark script from the root repository scripts directory:
-```bash
-source /opt/ros/jazzy/setup.bash
-cd ~/uav-edge-llm-gateway/scripts
-python3 benchmark_pipeline.py
-
-```
-**2. Generate Performance Graphs:**
-Plot the hardware metrics using the script located in the root repository data directory:
-```bash
-cd ~/uav-edge-llm-gateway/data
-python3 plot_results.py
-
-```
-```bash
-cd ros2_ws
-colcon build --symlink-install
-```
-
-4. Source the workspace:
-```bash
-source install/setup.bash
-```
-
-## 5. Configuration
-System constraints and behavior are managed centrally in `config/geofence_params.yaml`. Modify this file to adjust the following safety limits:
-* `max_altitude`: The maximum permitted altitude AGL (e.g., `100.0` meters).
-* `max_range_xy`: The lateral radius of the cylindrical geofence anchored at the takeoff home position (e.g., `40.0` meters).
-* `ground_noise_tolerance`: The margin for estimator noise at low altitudes to prevent false ground collision faults (e.g., `0.5` meters).
-
-*Note: Changes to this file take effect on the next node startup. A workspace rebuild is not required.*
-
-## 6. Running the System (SITL)
-Execute the following commands in separate terminal instances to spin up the closed-loop stack.
-
-1. Start the Ollama server:
-```bash
-ollama serve
-```
-
-2. Start the PX4 SITL environment (e.g., Gazebo):
-```bash
-cd ~/PX4-Autopilot
-HEADLESS=1 make px4_sitl gz_x500_mono_cam
-```
-
-3. Start the Micro XRCE-DDS agent:
-```bash
-MicroXRCEAgent udp4 -p 8888
-```
-
-4. Launch the full ROS 2 system stack:
-```bash
-cd ~/uav-edge-llm-gateway/ros2_ws
-source install/setup.bash
 ros2 launch drone_safety full_system.launch.py
 ```
-*(Optional args: `model:=qwen2.5:7b` or `log_level:=debug`)*
 
-## 7. Benchmarking (Optional)
-To evaluate the LLM's inference latency and semantic accuracy under hardware constraints, use the automated benchmark pipeline.
-
-1. Run the benchmark pipeline launch file:
+Optional arguments:
 ```bash
-cd ~/uav-edge-llm-gateway/ros2_ws
-source install/setup.bash
+ros2 launch drone_safety full_system.launch.py model:=qwen2.5:7b
+ros2 launch drone_safety full_system.launch.py log_level:=debug
+ros2 launch drone_safety full_system.launch.py headless:=false
+```
+
+Once running, send commands from any terminal:
+```bash
+ros2 topic pub --once /llm/command_input std_msgs/String "data: 'Fly forward 5 meters'"
+```
+
+Monitor the pipeline:
+```bash
+ros2 topic echo /llm/raw_output    # validated JSON from LLM
+ros2 topic echo /llm/status        # inference status per command
+```
+
+---
+
+### `safety_filter.launch.py` — Filter in isolation
+
+Starts only the C++ safety filter node. Use this during early SITL debugging to test the geofence, coordinate transform, and tri-state machine without involving Ollama.
+
+```bash
+ros2 launch drone_safety safety_filter.launch.py
+ros2 launch drone_safety safety_filter.launch.py log_level:=debug
+```
+
+Feed it commands manually to verify behaviour:
+```bash
+# Valid command — should reach PX4
+ros2 topic pub --once /llm/raw_output std_msgs/String \
+  "data: '{\"action\":\"goto\",\"x\":5.0,\"y\":0.0,\"z\":0.0}'"
+
+# Geofence breach — should trigger KINEMATIC_HOLD
+ros2 topic pub --once /llm/raw_output std_msgs/String \
+  "data: '{\"action\":\"goto\",\"x\":100.0,\"y\":0.0,\"z\":0.0}'"
+```
+
+---
+
+### `benchmark.launch.py` — Accuracy and latency benchmark
+
+Starts the safety filter and benchmark pipeline. Does **not** start PX4, the DDS bridge, or Ollama — those must be running separately. The benchmark publishes real setpoints but without PX4 connected nothing acts on them, which is intentional.
+
+```bash
+# Terminal 1 — start Ollama first
+ollama serve
+
+# Optional: simulate edge hardware constraints
+sudo cpulimit -p $(pgrep -n ollama) -l 400 -b
+
+# Terminal 2 — run the benchmark
+source /opt/ros/jazzy/setup.bash
+source ~/uav-edge-llm-gateway/ros2_ws/install/setup.bash
 ros2 launch drone_safety benchmark.launch.py
 ```
 
-2. Generate analytical plots from the resulting telemetry data:
+Optional arguments:
 ```bash
-cd ~/uav-edge-llm-gateway/data
-python3 plot_results.py
+ros2 launch drone_safety benchmark.launch.py model:=qwen2.5:7b
+ros2 launch drone_safety benchmark.launch.py log_level:=debug
 ```
+
+Results are saved to `~/quantization_benchmark_results.csv` automatically. The benchmark is resume-capable — if interrupted, restarting continues from the last completed row.
+
+Generate performance charts after the benchmark completes:
+```bash
+ros2 run drone_safety plot_results
+
+# Or with a custom output directory
+python3 data/plot_results.py --out ~/Desktop/plots
+```
+
+Output charts:
+- `latency_distribution.png` — inference latency box plot
+- `accuracy_metrics.png` — syntactic and semantic success rates
+- `latency_time_series.png` — latency over sequential execution order
+- `per_command_accuracy.png` — per-command semantic accuracy breakdown
+
+---
+
+## 📋 Launch File Summary
+
+| Launch file | Ollama | PX4 + Gazebo | DDS bridge | Safety filter | Gateway | Benchmark |
+|---|---|---|---|---|---|---|
+| `full_system.launch.py` | ✅ auto | ✅ auto | ✅ auto | ✅ | ✅ | ❌ |
+| `safety_filter.launch.py` | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| `benchmark.launch.py` | ❌ manual | ❌ | ❌ | ✅ | ❌ | ✅ |
