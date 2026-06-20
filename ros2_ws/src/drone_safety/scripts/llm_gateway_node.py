@@ -120,63 +120,63 @@ def query_ollama(
                     json=payload,
                     timeout=(connect_timeout, read_timeout),
                 )
-            latency_ms = round((time.perf_counter() - t0) * 1000, 2)
-            response.raise_for_status()
+                latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+                response.raise_for_status()
 
-            raw_text = response.json().get("response", "").strip()
-            syntax_ok = False
-            extracted_json_str = ""
+                raw_text = response.json().get("response", "").strip()
+                syntax_ok = False
+                extracted_json_str = ""
 
-            try:
-                parse_err = None
-                parsed = None
-                for match in re.finditer(r'\{[^{}]*\}', raw_text):
-                    try:
-                        temp = json.loads(match.group(0))
-                        required = {"action", "x", "y", "z"}
-                        if required.issubset(temp.keys()):
-                            parsed = temp
-                            extracted_json_str = match.group(0)
-                            break
-                    except json.JSONDecodeError:
-                        continue
+                try:
+                    parse_err = None
+                    parsed = None
+                    for match in re.finditer(r'\{[\s\S]*\}', raw_text):
+                        try:
+                            temp = json.loads(match.group(0))
+                            required = {"action", "x", "y", "z"}
+                            if required.issubset(temp.keys()):
+                                parsed = temp
+                                extracted_json_str = match.group(0)
+                                break
+                        except json.JSONDecodeError:
+                            continue
 
-                if not parsed:
-                    raise ValueError("No valid JSON payload found in response.")
+                    if not parsed:
+                        raise ValueError("No valid JSON payload found in response.")
 
-                x = float(parsed["x"])
-                y = float(parsed["y"])
-                z = float(parsed["z"])
+                    x = float(parsed["x"])
+                    y = float(parsed["y"])
+                    z = float(parsed["z"])
 
-                if not (math.isfinite(x) and math.isfinite(y) and math.isfinite(z)):
-                    raise ValueError("Non-finite coordinate in LLM output.")
+                    if not (math.isfinite(x) and math.isfinite(y) and math.isfinite(z)):
+                        raise ValueError("Non-finite coordinate in LLM output.")
 
-                if parsed["action"] != "goto":
-                    raise ValueError(f"Unexpected action: {parsed['action']}")
+                    if parsed["action"] != "goto":
+                        raise ValueError(f"Unexpected action: {parsed['action']}")
 
-                syntax_ok = True
+                    syntax_ok = True
 
-            except (ValueError, TypeError) as e:
-                parse_err = e
-                logger.warning(f"Parse error: {parse_err} | Raw: {raw_text[:120]}")
+                except (ValueError, TypeError) as e:
+                    parse_err = e
+                    logger.warning(f"Parse error: {parse_err} | Raw: {raw_text[:120]}")
 
-            if syntax_ok:
-                return {
-                    "syntax_ok":        syntax_ok,
-                    "extracted_payload": extracted_json_str,
-                    "raw_output":       raw_text,
-                    "latency_ms":       latency_ms,
-                    "attempts":         attempt,
-                    "error":            "",
-                }
+                if syntax_ok:
+                    return {
+                        "syntax_ok":        syntax_ok,
+                        "extracted_payload": extracted_json_str,
+                        "raw_output":       raw_text,
+                        "latency_ms":       latency_ms,
+                        "attempts":         attempt,
+                        "error":            "",
+                    }
 
-        except (requests.exceptions.ConnectTimeout,
-                requests.exceptions.ReadTimeout):
-            err = "TIMEOUT"
-        except requests.exceptions.RequestException as e:
-            err = f"HTTP_ERROR: {e}"
-        except Exception as e:
-            err = str(e)
+            except (requests.exceptions.ConnectTimeout,
+                    requests.exceptions.ReadTimeout):
+                err = "TIMEOUT"
+            except requests.exceptions.RequestException as e:
+                err = f"HTTP_ERROR: {e}"
+            except Exception as e:
+                err = str(e)
 
         if attempt < max_retries:
             backoff = backoff_base * (2 ** (attempt - 1))
@@ -220,12 +220,12 @@ class LLMGatewayNode(Node):
         self.declare_parameter("connect_timeout", DEFAULT_CONNECT_TIMEOUT)
         self.declare_parameter("read_timeout",    DEFAULT_READ_TIMEOUT)
 
-        self.ollama_url      = self.get_parameter("ollama_url").as_string()
-        self.model_name      = self.get_parameter("model_name").as_string()
-        self.max_retries     = self.get_parameter("max_retries").as_int()
-        self.backoff_base    = self.get_parameter("backoff_base").as_double()
-        self.connect_timeout = self.get_parameter("connect_timeout").as_int()
-        self.read_timeout    = self.get_parameter("read_timeout").as_int()
+        self.ollama_url      = self.get_parameter("ollama_url").value
+        self.model_name      = self.get_parameter("model_name").value
+        self.max_retries     = self.get_parameter("max_retries").value
+        self.backoff_base    = self.get_parameter("backoff_base").value
+        self.connect_timeout = self.get_parameter("connect_timeout").value
+        self.read_timeout    = self.get_parameter("read_timeout").value
 
         # ── Publishers ────────────────────────────────────────────────────────
         self.output_pub_ = self.create_publisher(String, "/llm/raw_output", 10)

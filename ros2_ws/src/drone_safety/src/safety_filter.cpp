@@ -122,6 +122,7 @@ private:
         
         if (!has_odom || !has_home) {
             RCLCPP_WARN(this->get_logger(), "Odometry/Home uninitialized. Rejecting command.");
+            engage_blind_halt();
             return;
         }
 
@@ -163,8 +164,8 @@ private:
             double yaw = extract_yaw(odom);
             double cos_yaw = std::cos(yaw);
             double sin_yaw = std::sin(yaw);
-            double delta_n = (x * cos_yaw) - (y * sin_yaw);
-            double delta_e = (x * sin_yaw) + (y * cos_yaw);
+            double delta_n = (x * cos_yaw) + (y * sin_yaw);
+            double delta_e = (x * sin_yaw) - (y * cos_yaw);
 
             double target_n = odom.position[0] + delta_n;
             double target_e = odom.position[1] + delta_e;

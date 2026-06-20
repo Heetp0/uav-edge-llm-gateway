@@ -199,14 +199,12 @@ def query_with_retry(
 
             try:
                 parsed = None
-                for match in re.finditer(r'\{.*?\}', raw_text, re.DOTALL):
+                for match in re.finditer(r'\{[\s\S]*\}', raw_text):
                     try:
                         temp_parsed = json.loads(match.group(0))
                         required_keys = {"action", "x", "y", "z"}
                         
                         if required_keys.issubset(temp_parsed.keys()):
-                            if not set(temp_parsed.keys()).issubset(required_keys):
-                                continue 
                             parsed = temp_parsed
                             extracted_json_str = match.group(0)
                             break
@@ -267,6 +265,14 @@ def query_with_retry(
 class LLMBenchmarkNode(Node):
     def __init__(self):
         super().__init__("llm_benchmark_node")
+        
+        global OLLAMA_URL, MODEL_NAME
+        self.declare_parameter("ollama_url", OLLAMA_URL)
+        self.declare_parameter("model_name", MODEL_NAME)
+        
+        OLLAMA_URL = self.get_parameter("ollama_url").value
+        MODEL_NAME = self.get_parameter("model_name").value
+        
         self.llm_output_pub_ = self.create_publisher(String, "/llm/raw_output", 10)
         self.csv_path = os.path.expanduser("~/quantization_benchmark_results.csv")
         
@@ -376,6 +382,11 @@ class LLMBenchmarkNode(Node):
             
             self.cells_done_total += 1
             self.session_done_count += 1
+            
+            if self.session_done_count % SESSION_RECYCLE == 0:
+                self.session.close()
+                self.session = requests.Session()
+                self.session.headers.update({"Connection": "keep-alive"})
 
             if result["syntax_success"]:
                 try:

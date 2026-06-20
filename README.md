@@ -41,9 +41,11 @@ git clone https://github.com/Heetp0/uav-edge-llm-gateway.git
 cd uav-edge-llm-gateway
 ```
 
-**2. Install Python dependencies**
+**2. Run the Ubuntu Setup Script**
+This script automates the installation of ROS 2 Jazzy, system dependencies (`colcon`, `nlohmann-json3-dev`, `cpulimit`), Python requirements, and clones the missing `px4_msgs` repository.
 ```bash
-pip install -r requirements.txt
+chmod +x setup_ubuntu.sh
+./setup_ubuntu.sh
 ```
 
 **3. Pull the edge-optimized AI model**
@@ -189,3 +191,15 @@ Output charts:
 | `full_system.launch.py` | ✅ auto | ✅ auto | ✅ auto | ✅ | ✅ | ❌ |
 | `safety_filter.launch.py` | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | `benchmark.launch.py` | ❌ manual | ❌ | ❌ | ✅ | ❌ | ✅ |
+
+---
+
+## 🔧 Troubleshooting
+
+### Mixed OS Environments (Windows / Linux)
+If you clone this repository on Windows and attempt to run it on Linux (or via WSL), scripts might fail to execute due to `\r\n` (CRLF) line endings. You can resolve this using the included utility script from the repository root:
+
+```bash
+python3 fix_crlf.py
+```
+This script recursively scans the project and normalizes all `.py`, `.sh`, `.yaml`, `.xml`, `.txt`, and `.md` files to use Unix `\n` (LF) line endings.

@@ -190,7 +190,3 @@ def generate_launch_description():
         safety_filter_node,   # t=5s
         llm_gateway_node,     # t=7s
     ])
-        ollama_url_arg,
-        safety_filter_node,
-        llm_gateway_node,
-    ])

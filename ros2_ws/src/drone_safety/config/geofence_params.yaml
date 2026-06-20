@@ -37,7 +37,7 @@ safety_filter_node:
     watchdog_timeout_sec: 0.5
 
 
-llm_benchmark_node: &llm_node
+llm_benchmark_node:
   ros__parameters:
 
     # ── Ollama endpoint ───────────────────────────────────────────────────────
@@ -82,4 +82,47 @@ llm_benchmark_node: &llm_node
     # A parsed coordinate is considered correct if |parsed - expected| <= tolerance.
     spatial_tolerance: 0.5
 
-llm_gateway_node: *llm_node
+llm_gateway_node:
+  ros__parameters:
+
+    # ── Ollama endpoint ───────────────────────────────────────────────────────
+    ollama_url: "http://localhost:11434/api/generate"
+
+    # Model to benchmark. Must be pulled via `ollama pull <model>` first.
+    model_name: "qwen2.5:3b"
+
+    # ── Benchmark run configuration ───────────────────────────────────────────
+    # Total number of complete passes through TEST_DATA.
+    total_runs: 50
+
+    # ── Retry / backoff ───────────────────────────────────────────────────────
+    # Maximum number of HTTP retry attempts per command before writing a failure row.
+    max_retries: 3
+
+    # Base backoff in seconds. Actual backoff = base * 2^(attempt-1).
+    backoff_base: 3.0
+
+    # HTTP connection timeout (seconds).
+    connect_timeout: 5
+
+    # HTTP read timeout (seconds). Set high — edge inference can be slow.
+    read_timeout: 90
+
+    # ── Session management ────────────────────────────────────────────────────
+    # Recycle the TCP session every N completed requests to prevent
+    # connection-level timeouts on long benchmark runs.
+    session_recycle: 100
+
+    # ── Adaptive pacing ───────────────────────────────────────────────────────
+    # Rolling window size for latency averaging (number of requests).
+    latency_window: 10
+
+    # Minimum and maximum inter-request sleep derived from rolling latency average.
+    # sleep = clamp(avg_latency_ms / 10000, min_sleep, max_sleep)
+    min_sleep: 0.5
+    max_sleep: 6.0
+
+    # ── Semantic evaluation ───────────────────────────────────────────────────
+    # Tolerance in metres for x/y/z coordinate comparison.
+    # A parsed coordinate is considered correct if |parsed - expected| <= tolerance.
+    spatial_tolerance: 0.5

@@ -22,17 +22,17 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # HTTP client — used by benchmark_pipeline.py to query Ollama REST API
-requests>=2.31.0
+requests==2.34.2
 
 # Data processing — used by benchmark_pipeline.py (CSV) and plot_results.py
-pandas>=2.0.0
-numpy>=1.24.0
+pandas==3.0.3
+numpy==2.4.6
 
 # Plotting — used by plot_results.py to generate benchmark charts
-matplotlib>=3.7.0
+matplotlib==3.11.0
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DEV / TEST DEPENDENCIES
 # Install with: pip install -r requirements.txt pytest
 # ─────────────────────────────────────────────────────────────────────────────
-pytest>=7.4.0
+pytest==9.1.1
