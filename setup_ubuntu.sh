@@ -19,7 +19,7 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-a
 # 2. Install apt dependencies
 echo "[2/4] Installing apt dependencies (ROS 2, Colcon, JSON, CPULimit)..."
 sudo apt update
-sudo apt install ros-jazzy-desktop python3-colcon-common-extensions nlohmann-json3-dev cpulimit -y
+sudo apt install ros-jazzy-desktop python3-colcon-common-extensions nlohmann-json3-dev cpulimit zstd pciutils -y
 
 # 3. Clone px4_msgs
 echo "[3/4] Cloning px4_msgs into ros2_ws/src..."
