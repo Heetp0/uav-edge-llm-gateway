@@ -48,12 +48,18 @@ chmod +x setup_ubuntu.sh
 ./setup_ubuntu.sh
 ```
 
-**3. Pull the edge-optimized AI model**
+**3. Install Ollama**
+Install the Ollama engine, which handles the local LLM inference.
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+**4. Pull the edge-optimized AI model**
 ```bash
 ollama pull qwen2.5:3b
 ```
 
-**4. Build the ROS 2 workspace**
+**5. Build the ROS 2 workspace**
 ```bash
 cd ros2_ws
 source /opt/ros/jazzy/setup.bash
