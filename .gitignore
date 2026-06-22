@@ -9,6 +9,7 @@ __pycache__/
 *.pyc
 *.pyo
 venv/
+test_venv/
 .env
 .venv/
 
